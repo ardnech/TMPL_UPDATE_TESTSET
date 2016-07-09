@@ -4,19 +4,21 @@ Imports System.Data.SqlClient
 Public Class Form1
     Public clTDConnectivity As New TDConnectivity
     Sub GetTsTcFromTestLab()
-
-        Call clTDConnectivity.ConnectToTD()
-
         Dim tsTreeMgr, theTestSet
         Dim separateChars1 As String = "$"
         Dim separateChars2 As String = "<"
         '  On Error GoTo err
-
+        Dim sTS_Name As String, sTS_Path As String, sTS_Param As String, sTS_Status As String, sTS_ALM_ID As Long
+        Dim sTC_Name As String, sTC_Path As String, sTC_Param As String, sTC_Status As String, sTC_ALM_ID As Long
+        Dim sqlConnScenarioID As String, sqlConnCaseID As String
         Dim TSetFact
         Dim tsFolder
         Dim tsList
-        ' Get the test set tree manager from the test set factory
-        'tdconnection is the global TDConnection object.
+        Dim tsTestFactory
+        Dim tsTestList
+        Dim dbConn As New dbConnectivity
+
+        Call clTDConnectivity.ConnectToTD()
         TSetFact = clTDConnectivity.tdConnection.TestSetFactory
         tsTreeMgr = clTDConnectivity.tdConnection.testsettreemanager
 
@@ -33,18 +35,7 @@ Public Class Form1
             Debug.Print("Brak TestSet w Folderze: " & clTDConnectivity.nPath)
         End If
         '-------------------------------------------Access the Test Cases inside the Test SEt -------------------------------------------------
-
-        Dim tsTestFactory
-        Dim tsTestList
-
         theTestSet = tsList.Item(1)
-
-
-        Dim sTS_Name As String, sTS_Path As String, sTS_Param As String, sTS_Status As String, sTS_ALM_ID As Long
-        Dim sTC_Name As String, sTC_Path As String, sTC_Param As String, sTC_Status As String, sTC_ALM_ID As Long
-        Dim sqlConnScenarioID As String, sqlConnCaseID As String
-
-        Dim dbConn As New dbConnectivity
 
         For Each testsetfound In tsList
             tsFolder = testsetfound.TestSetFolder
@@ -58,7 +49,6 @@ Public Class Form1
                 sTS_Path = tsFolder.path
                 sTS_Param = (StrTok(testsetfound.Field("CY_COMMENT"), separateChars1, separateChars2))
                 sTS_ALM_ID = testsetfound.ID
-
 
                 'Rozpoczęcie wrzucania TSTS do DB
                 sqlConnScenarioID = dbConn.sqlConnScenario(sTS_Name, sTS_Path, sTS_Param, sTS_Status, sTS_ALM_ID)
@@ -125,10 +115,17 @@ err:
     End Function
 
     Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click
+        GetTsTcFromTestLab()
         Dim clStatusChange As New StatusChange
         Call clStatusChange.ChangeStatusScenario("101", "Not Completed")
-        Call clStatusChange.ChangeStatusCase("4", "Not Completed")
-        'GetTsTcFromTestLab()
+
+
+        '
+    End Sub
+
+    Private Sub Button2_Click(sender As Object, e As EventArgs) Handles Button2.Click
+        Dim clStatusChangeCase As New StatusChangeCase
+        Call clStatusChangeCase.ChangeStatusCase("101", "5", "Failed")
     End Sub
 End Class
 
@@ -149,7 +146,6 @@ Public Class TDConnectivity
         qcDomain = "UFT"
         qcProject = "UFT"
         nPath = Trim("Root\Automaty") ' test set folder
-
         '-----------------------------------------------------Connect to Quality Center --------------------------------------------------------
 
         'Create a Connection object to connect to Quality Center
@@ -160,12 +156,6 @@ Public Class TDConnectivity
         tdConnection.Login(qcID, qcPWD)
         'connecting to the domain and project
         tdConnection.Connect(qcDomain, qcProject)
-        'On successfull login display message in Status bar
-        ' Application.StatusBar = "........QC Connection is done Successfully"
-        '  MsgBox("Connection Established")
-
-        '---------------------------------------Connection Established --------------------------------------------------------------------------
-        'ConnectToQualityCenter(qcURL, qcID, qcPWD, qcDomain, qcProject, nPath)
     End Sub
 
     Public Sub DisconnectfromTD()
@@ -294,6 +284,7 @@ End Class
 
 Public Class StatusChange
     Public clTDConnectivity As New TDConnectivity
+
     Sub ChangeStatusScenario(ByVal qcTSId As Long, ByVal qcStatus As String)
         Call clTDConnectivity.ConnectToTD()
 
@@ -313,35 +304,51 @@ Public Class StatusChange
         TSetFact = Nothing
         'data
     End Sub
+End Class
 
-    Sub ChangeStatusCase(ByVal qcTCId As Long, ByVal qcStatus As String)
-        Call clTDConnectivity.ConnectToTD()
+Public Class StatusChangeCase
+    Public tdConnection As Object
+    Public nPath As String
+    Sub ChangeStatusCase(ByVal qcTSId As Long, ByVal qcTCId As Long, ByVal qcStatus As String)
 
-        Dim TTestFact, TestFilter, TestList, myTest
-        'TSetFact = clTDConnectivity.tdConnection.TestSetFactory
-        TTestFact = clTDConnectivity.tdConnection.TestFactory
 
-        'TestSetFilter = TSetFact.Filter
-        TestFilter = TTestFact.Filter
+        Dim qcURL As String, qcID As String, qcPWD As String, qcDomain As String, qcProject As String
+        qcURL = "http://profive1v5.radom.tsunami:8080/qcbin"
+        qcID = "mantoniak"
+        qcPWD = "mantoniak"
+        qcDomain = "UFT"
+        qcProject = "UFT"
+        nPath = Trim("Root\Automaty") ' test set folder
+        tdConnection = CreateObject("TDApiOle80.TDConnection")
+        tdConnection.InitConnectionEx(qcURL)
+        tdConnection.Login(qcID, qcPWD)
+        tdConnection.Connect(qcDomain, qcProject)
+        '#
 
-        'TestSetFilter.Filter("CY_CYCLE_ID") = qcTCId
-        TestFilter.Filter("TC_TESTCYCL_ID") = qcTCId
+        Dim TSetFact, TestSetFilter, TestSetList, myTestSet, TSTestFactory
 
-        'TestSetList = TestSetFilter.NewList
-        TestList = TestFilter.NewList
+        TSetFact = tdConnection.TestSetFactory
+        TestSetFilter = TSetFact.Filter
+        TestSetFilter.Filter("CY_CYCLE_ID") = qcTSId
 
-        'myTestSet = TestSetList.Item(1)
-        myTest = TestList.Item(1)
-        MsgBox(myTest.name)
-        'myTestSet.Field("TS_TEST_ID") = (qcStatus)
-        myTest.Field("TC_STATUS") = (qcStatus)
+        TestSetList = TestSetFilter.NewList
+        myTestSet = TestSetList.Item(1)
+        TSTestFactory = myTestSet.TSTestFactory
 
-        'myTestSet.Post
-        myTest.Post
+        For Each qtTest In TSTestFactory.NewList("")
+            If qtTest.id = qcTCId Then
+                qtTest.Field("TC_STATUS") = qcStatus
+                qtTest.Post
+            End If
+        Next
 
-        Call clTDConnectivity.DisconnectfromTD()
-        TestFilter = Nothing
-        myTest = Nothing
-        TTestFact = Nothing
+
+        '#
+        '------------------------------------------------------Disconnect Quality Center -----------------------------------------------------------------
+        tdConnection.Disconnect
+        tdConnection.Logout
+        tdConnection.ReleaseConnection
     End Sub
 End Class
+
+

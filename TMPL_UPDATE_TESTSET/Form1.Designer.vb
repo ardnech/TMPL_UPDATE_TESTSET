@@ -41,7 +41,7 @@ Partial Class Form1
         Me.Button2.Name = "Button2"
         Me.Button2.Size = New System.Drawing.Size(75, 23)
         Me.Button2.TabIndex = 1
-        Me.Button2.Text = "MSSQL"
+        Me.Button2.Text = "TC change"
         Me.Button2.UseVisualStyleBackColor = True
         '
         'Form1
