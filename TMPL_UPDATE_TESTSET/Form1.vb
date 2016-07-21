@@ -13,7 +13,7 @@ Public Class Form1
         Dim sLog As String, dDateToday As Date = Today
 
         Dim sTS_Name As String, sTS_Path As String, sTS_Status As String, sTS_ALM_ID As Long
-        Dim sTS_Group As String, sTSPriorytet As String, sTSEmail As String, sTSEnvirnoment As String, sTSVDINum As String
+        Dim sTS_Group As String, sTSPriorytet As String, sTSEmail As String, sTSEnvirnoment As String, sTSVDINum As String, sTSSystem As String
         Dim sTSLogLevel As String, sTSVDIName As String, sTSDataSource As String, sTS_Param As String, sTSReUseData As String
         Dim sTSRepeating As String, aRepeatingDate As Array, sRepeatingDate As String = ""
 
@@ -177,6 +177,13 @@ Public Class Form1
                     sTSReUseData = "$useCreatingData=" & TestSetFound.Field("CY_USER_12")
                 End If
 
+                'Testowany System  Cycle	CY_USER_12
+                If IsNothing(TestSetFound.Field("CY_USER_12")) Then
+                    sTSSystem = "$system=Brak_Danych"
+                Else
+                    sTSSystem = "$system=" & TestSetFound.Field("CY_USER_12")
+                End If
+
                 'Zebranie parametrów do przekazania do DB MSSQL do dalszej obróbki
                 sTS_Param = sTS_Group
                 sTS_Param = sTS_Param & "," & sTSPriorytet
@@ -187,6 +194,7 @@ Public Class Form1
                 sTS_Param = sTS_Param & "," & sTSVDINum
                 sTS_Param = sTS_Param & "," & sTSDataSource
                 sTS_Param = sTS_Param & "," & sTSReUseData
+                sTS_Param = sTS_Param & "," & sTSSystem
                 sTS_Param = sTS_Param & "," & sRepeatingDate
 
                 'Dodaj TS do DB i pobierz unikalne ID z MSSQL
