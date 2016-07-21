@@ -200,6 +200,7 @@ Public Class Form1
                 'Dodaj TS do DB i pobierz unikalne ID z MSSQL
                 sqlConnScenarioID = dbConn.sqlConnScenario(sTS_Name, sTS_Path, sTS_Param, sTS_Status, sTS_ALM_ID)
 
+
                 'Rozpocznij wyszukiwanie TC
                 For Each tsTest In tsTestList
                     sTC_Name = tsTest.Name
