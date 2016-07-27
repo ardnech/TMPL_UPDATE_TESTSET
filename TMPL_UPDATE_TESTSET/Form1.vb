@@ -238,7 +238,7 @@ Public Class Form1
                 sLog = sLog & " | " & "Status zmieniany z: " & sTsTcProcessing & " na: " & sTsTcCorrectDownload
                 sLog = sLog & Chr(10) & "###POBRANIE DO KOLEJKI WYKONANIA - KONIEC###"
                 'Potwierdzenie zakończenia pobierania całego TS
-                clStatusChange.ChangeStatusScenario(sTS_ALM_ID, sTsTcCorrectDownload, sLog)
+                clStatusChange.ChangeStatusScenario(sTS_ALM_ID, sTsTcCorrectDownload, sLog, 1)
                 Debug.Print(sqlConnScenarioID)
             End If
         Next TestSetFound
@@ -509,10 +509,11 @@ End Class
 Public Class StatusChange
     Public clTDConnectivity As New TDConnectivity
 
-    Sub ChangeStatusScenario(ByVal qcTSId As Long, ByVal qcStatus As String, ByVal sLog As String)
+    Sub ChangeStatusScenario(ByVal qcTSId As Long, ByVal qcStatus As String, ByVal sLog As String, Optional ByVal sAttachment As String = "")
         Call clTDConnectivity.ConnectToTD()
-
+        Dim dDateToday As String = Today & "_" & Now.ToLongTimeString
         Dim TSetFact, TestSetFilter, TestSetList, myTestSet
+        Dim attachF, theAttachment
         TSetFact = clTDConnectivity.tdConnection.TestSetFactory
         TestSetFilter = TSetFact.Filter
         TestSetFilter.Filter("CY_CYCLE_ID") = qcTSId
@@ -526,6 +527,20 @@ Public Class StatusChange
         myTestSet.Field("CY_USER_07") = myTestSet.Field("CY_USER_07") & vbCr & sLog
         myTestSet.Post
 
+
+        If sAttachment <> "" Then
+            attachF = myTestSet.Attachments
+            theAttachment = attachF.AddItem(System.DBNull.Value)
+            theAttachment.Description = "Załącznik dodany: " & dDateToday
+            theAttachment.Type = 1
+            theAttachment.FileName = "E:\\test.txt"
+
+            theAttachment.Post
+        End If
+        ' theAttachment.Filename = "123"
+        ' theAttachment.Type = "TDATT_FILE"
+
+        'End If
         'clTDConnectivity.tdConnection.IgnoreHtmlFormat = True
 
         Call clTDConnectivity.DisconnectfromTD()
@@ -538,11 +553,13 @@ End Class
 Public Class StatusChangeCase
     Public clTDConnectivity As New TDConnectivity
 
-    Sub ChangeStatusCase(ByVal qcTSId As Long, ByVal qcTCId As Long, ByVal qcStatus As String, ByVal sLog As String)
+    Sub ChangeStatusCase(ByVal qcTSId As Long, ByVal qcTCId As Long, ByVal qcStatus As String, ByVal sLog As String, Optional ByVal sAttachment As String = "1")
         Call clTDConnectivity.ConnectToTD()
 
         Dim TSetFact, TestSetFilter, TestSetList, myTestSet, TSTestFactory
-        Dim tcStepID, theRun
+        Dim tcStepID, theRun, attachF, theAttachment
+        Dim dDateToday As String = Today & "_" & Now.ToLongTimeString
+
 
         TSetFact = clTDConnectivity.tdConnection.TestSetFactory
         TestSetFilter = TSetFact.Filter
@@ -562,13 +579,26 @@ Public Class StatusChangeCase
         For Each qtTest In TSTestFactory.NewList("")
             If qtTest.id = qcTCId Then
                 qtTest.Field("TC_STATUS") = qcStatus
+                'qtTest.Field("TC_STATUS") = "No Run"
                 qtTest.Post
+
                 tcStepID = qtTest.RunFactory
-                For Each theRun In tcStepID.newlist("")
-                    theRun.Status = qcStatus
-                    ' theRun.CopyDesignSteps
-                    theRun.Post
-                Next
+                ' RunF = tstInstance.RunFactory 
+                'For Each theRun In tcStepID.newlist("")
+                theRun = tcStepID.AddItem("Automated_" & dDateToday)
+                theRun.Status = qcStatus
+                ' theRun.CopyDesignSteps
+                theRun.Post
+                If sAttachment <> "" Then
+                    attachF = theRun.Attachments
+                    theAttachment = attachF.AddItem(System.DBNull.Value)
+                    theAttachment.Description = "Załącznik dodany: " & dDateToday
+                    theAttachment.Type = 1
+                    theAttachment.FileName = "E:\\test.txt"
+                    theAttachment.Post
+                End If
+                theRun.Refresh
+                ' Next
             End If
         Next
         Call clTDConnectivity.DisconnectfromTD()
