@@ -344,8 +344,15 @@ ErrorHandler:
     End Sub
 
     Private Sub Button2_Click(sender As Object, e As EventArgs) Handles Button2.Click
+
         Dim clStatusChangeCase As New StatusChangeCase
-        'Call clStatusChangeCase.ChangeStatusCase("101", "5", "Failed")
+        Call clStatusChangeCase.ChangeStatusCase("101", "5", "Failed", "AA")
+    End Sub
+
+    Private Sub Button3_Click_1(sender As Object, e As EventArgs) Handles Button3.Click
+        Dim clAddAttachment As New AddAttachments
+        Call clAddAttachment.AddAttachmentTS_TC("108", "1002", "Jakiś opis do dodawanego załącznika", "C:\\test.txt", 0)
+        'TS ID, TC ID, Opis załącznika, Ścieżka załącznika, parametr: 0 - dodawanie do TS lub 1 - dodawanie do TS i TC)
     End Sub
 End Class
 
@@ -531,9 +538,9 @@ Public Class StatusChange
         If sAttachment <> "" Then
             attachF = myTestSet.Attachments
             theAttachment = attachF.AddItem(System.DBNull.Value)
-            theAttachment.Description = "Załącznik dodany: " & dDateToday
+            theAttachment.Description = dDateToday & " Załącznik dodany: " & sAttachment
             theAttachment.Type = 1
-            theAttachment.FileName = "E:\\test.txt"
+            theAttachment.FileName = sAttachment
 
             theAttachment.Post
         End If
@@ -581,7 +588,6 @@ Public Class StatusChangeCase
                 qtTest.Field("TC_STATUS") = qcStatus
                 'qtTest.Field("TC_STATUS") = "No Run"
                 qtTest.Post
-
                 tcStepID = qtTest.RunFactory
                 ' RunF = tstInstance.RunFactory 
                 'For Each theRun In tcStepID.newlist("")
@@ -592,9 +598,9 @@ Public Class StatusChangeCase
                 If sAttachment <> "" Then
                     attachF = theRun.Attachments
                     theAttachment = attachF.AddItem(System.DBNull.Value)
-                    theAttachment.Description = "Załącznik dodany: " & dDateToday
+                    theAttachment.Description = dDateToday & " Załącznik dodany: " & sAttachment
                     theAttachment.Type = 1
-                    theAttachment.FileName = "E:\\test.txt"
+                    theAttachment.FileName = sAttachment
                     theAttachment.Post
                 End If
                 theRun.Refresh
@@ -605,6 +611,68 @@ Public Class StatusChangeCase
 
     End Sub
 
+
+
 End Class
 
 
+Public Class AddAttachments
+    Public clTDConnectivity As New TDConnectivity
+    Sub AddAttachmentTS_TC(ByVal qcTSId As Long, ByVal qcTCId As Long, ByVal sLog As String, ByVal sAttachment As String, Optional ByVal iAttachment As Integer = 1)
+        Call clTDConnectivity.ConnectToTD()
+
+        Dim TSetFact, TestSetFilter, TestSetList, myTestSet, TSTestFactory
+        Dim tcStepID, theRun, attachF, theAttachment
+        Dim dDateToday As String = Today & "_" & Now.ToLongTimeString
+
+
+        TSetFact = clTDConnectivity.tdConnection.TestSetFactory
+        TestSetFilter = TSetFact.Filter
+        TestSetFilter.Filter("CY_CYCLE_ID") = qcTSId
+
+        TestSetList = TestSetFilter.NewList
+        myTestSet = TestSetList.Item(1)
+        TSTestFactory = myTestSet.TSTestFactory
+
+        clTDConnectivity.tdConnection.IgnoreHtmlFormat = False
+
+        Select Case iAttachment
+            Case 0 'Dodanie załącznika do TS i TC
+                myTestSet.Field("CY_USER_07") = myTestSet.Field("CY_USER_07") & vbCr & sLog
+                myTestSet.post
+                attachF = myTestSet.Attachments
+                theAttachment = attachF.AddItem(System.DBNull.Value)
+                theAttachment.Description = dDateToday & " Załącznik dodany: " & sAttachment
+                theAttachment.Type = 1
+                theAttachment.FileName = sAttachment
+                theAttachment.Post
+
+                For Each qtTest In TSTestFactory.NewList("")
+                    If qtTest.id = qcTCId Then
+                        qtTest.Post
+                        tcStepID = qtTest.RunFactory
+                        theRun = tcStepID.AddItem("Automated_" & dDateToday)
+                        attachF = theRun.Attachments
+                        theAttachment = attachF.AddItem(System.DBNull.Value)
+                        theAttachment.Description = dDateToday & " Załącznik dodany: " & sAttachment
+                        theAttachment.Type = 1
+                        theAttachment.FileName = sAttachment
+                        theAttachment.Post
+                        theRun.Refresh
+                        ' Next
+                    End If
+                Next
+            Case 1 'Dodanie załącznika do TS 
+                myTestSet.Field("CY_USER_07") = myTestSet.Field("CY_USER_07") & vbCr & sLog
+                myTestSet.post
+                attachF = myTestSet.Attachments
+                theAttachment = attachF.AddItem(System.DBNull.Value)
+                theAttachment.Description = dDateToday & " Załącznik dodany: " & sAttachment
+                theAttachment.Type = 1
+                theAttachment.FileName = sAttachment
+                theAttachment.Post
+        End Select
+        Call clTDConnectivity.DisconnectfromTD()
+
+    End Sub
+End Class
