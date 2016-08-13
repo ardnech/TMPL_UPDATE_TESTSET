@@ -1,11 +1,12 @@
 ﻿Imports System.Net
 Imports System.Data.SqlClient
+Imports TDAPIOLELib
 
 Public Class Form1
     Public clTDConnectivity As New TDConnectivity
     Sub GetTsTcFromTestLab()
 
-        On Error GoTo ErrorHandler
+        '  On Error GoTo ErrorHandler
 
         Dim tsTreeMgr, theTestSet
         Dim separateChars1 As String = "$"
@@ -163,6 +164,7 @@ Public Class Form1
                         End If
                     Next
                 Else 'jeśli nie jest cykliczność sprawdzenie czy uruchomienie w dacie w przyszłości
+                    sTSRepeating = "N" 'przypisanie wartości jeśli nie jest Y
                     If IsNothing(TestSetFound.Field("CY_USER_03")) Then
                         sRepeatingDate = "$runDate=" & Now.ToLongTimeString
                     Else 'Planowana Data uruchomienia jeśli nie cykliczna	CY_USER_03
@@ -170,11 +172,11 @@ Public Class Form1
                     End If
                 End If
 
-                'Reużywalność danych: Cycle   CY_USER_12
-                If IsNothing(TestSetFound.Field("CY_USER_12")) Then
+                'Reużywalność danych: Cycle   CY_USER_14
+                If IsNothing(TestSetFound.Field("CY_USER_14")) Then
                     sTSReUseData = "$useCreatingData=N"
                 Else
-                    sTSReUseData = "$useCreatingData=" & TestSetFound.Field("CY_USER_12")
+                    sTSReUseData = "$useCreatingData=" & TestSetFound.Field("CY_USER_14")
                 End If
 
                 'Testowany System  Cycle	CY_USER_12
@@ -182,6 +184,12 @@ Public Class Form1
                     sTSSystem = "$system=Brak_Danych"
                 Else
                     sTSSystem = "$system=" & TestSetFound.Field("CY_USER_12")
+                End If
+                'Wysyłka Jira CY_USER_15
+                If IsNothing(TestSetFound.Field("CY_USER_15")) Then
+                    sTSJira = "$sendJira=N"
+                Else
+                    sTSJira = "$sendJira=" & TestSetFound.Field("CY_USER_15")
                 End If
 
                 'Zebranie parametrów do przekazania do DB MSSQL do dalszej obróbki
@@ -196,6 +204,8 @@ Public Class Form1
                 sTS_Param = sTS_Param & "," & sTSReUseData
                 sTS_Param = sTS_Param & "," & sTSSystem
                 sTS_Param = sTS_Param & "," & sRepeatingDate
+                sTS_Param = sTS_Param & "," & sTSRepeating
+                sTS_Param = sTS_Param & "," & sTSJira
 
                 'Dodaj TS do DB i pobierz unikalne ID z MSSQL
                 sqlConnScenarioID = dbConn.sqlConnScenario(sTS_Name, sTS_Path, sTS_Param, sTS_Status, sTS_ALM_ID)
@@ -238,7 +248,7 @@ Public Class Form1
                 sLog = sLog & " | " & "Status zmieniany z: " & sTsTcProcessing & " na: " & sTsTcCorrectDownload
                 sLog = sLog & Chr(10) & "###POBRANIE DO KOLEJKI WYKONANIA - KONIEC###"
                 'Potwierdzenie zakończenia pobierania całego TS
-                clStatusChange.ChangeStatusScenario(sTS_ALM_ID, sTsTcCorrectDownload, sLog, 1)
+                clStatusChange.ChangeStatusScenario(sTS_ALM_ID, sTsTcCorrectDownload, sLog)
                 Debug.Print(sqlConnScenarioID)
             End If
         Next TestSetFound
@@ -354,10 +364,144 @@ ErrorHandler:
         Call clAddAttachment.AddAttachmentTS_TC("108", "1002", "Jakiś opis do dodawanego załącznika", "C:\\test.txt", 0)
         'TS ID, TC ID, Opis załącznika, Ścieżka załącznika, parametr: 0 - dodawanie do TS lub 1 - dodawanie do TS i TC)
     End Sub
+
+    Private Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
+        Dim ClCopyTP As New Copy_TPtoTL
+        Call ClCopyTP.CopyTPlanToTLab()
+    End Sub
+
+    Private Sub Button5_Click(sender As Object, e As EventArgs) Handles Button5.Click
+        'Dim tdConnection As Object
+        On Error Resume Next
+        Dim nPath As String
+        Dim qcURL As String
+        Dim qcID As String
+        Dim qcPWD As String
+        Dim qcDomain As String
+        Dim qcProject As String
+        Dim TestSetFound, strMsg, iFolderID
+
+        Dim tdConnection = New TDAPIOLELib.TDConnection
+        Dim TSetFact As TestSetFactory
+        Dim tsTreeMgr As TestSetTreeManager
+        Dim tsFolder As TestSetFolder
+        Dim tsList
+        iFolderID = 65
+
+        qcURL = "http://profive1v5.radom.tsunami:8080/qcbin"
+        qcID = "uft"
+        qcPWD = "uft"
+        qcDomain = "UFT"
+        qcProject = "UFT"
+        nPath = Trim("Root") ' test set folder
+        '-----------------------------------------------------Connect to Quality Center --------------------------------------------------------
+        'tdConnection
+        'Create a Connection object to connect to Quality Center
+        'tdConnection = CreateObject("TDApiOle80.TDConnection")
+
+
+        'Initialise the Quality center connection
+        TDConnection.InitConnectionEx(qcURL)
+        'Authenticating with username and password
+        tdConnection.Login(qcID, qcPWD)
+        'connecting to the domain and project
+        tdConnection.Connect(qcDomain, qcProject)
+
+        tsTreeMgr = tdConnection.TestSetTreeManager
+        tsFolder = tsTreeMgr.NodeById(iFolderID)
+        'MsgBox(tsFolder.Path)
+        tsList = tsFolder.FindTestSets("")
+        For Each TestSetFound In tsList
+
+            TestSetFound.Status = "Ready to start"
+            TestSetFound.Post
+            TestSetFound.Refresh
+        Next
+
+        '        / where 'tdc' is a valid TDConnection object logged in to DEFAULT.QualityCenter_Demo
+        '// string testSetFolderPath = @"Root\Mercury Tours Web Site";                          // 0 test sets (Method 1 And 2 return 5)
+        'String testSetFolderPath = @"Root\Mercury Tours Web Site\Functionality And UI";     // 3 test sets
+
+        '// Method 1 TestSetFolder.FindTestSets()
+        '        var TestSetTreeManager = (TestSetTreeManager)tdc.TestSetTreeManager;
+        'var TestSetFolder = (TestSetFolder)testSetTreeManager.get_NodeByPath(testSetFolderPath);
+        'var testSets = TestSetFolder.FindTestSets("", False, "");
+        'Console.WriteLine("Folder {0} contains {1} testsets", testSetFolderPath, testSets.Count);
+
+        '// Method 2 NewList() With filter
+        'var TestSetFactory = (TestSetFactory)tdc.TestSetFactory;
+        'var Filter() = (TDFilter)testSetFactory.Filter;
+        'Filter()["CY_FOLDER_ID"] = "^" + testSetFolderPath + "^";
+        'testSets = (List)testSetFactory.NewList(filter.Text);
+        'Console.WriteLine("Folder {0} contains {1} testsets", testSetFolderPath, testSets.Count);
+
+        '// Method 3 Sql Query using Command object
+        'var Command = tdc.Command;
+        'Command.CommandText = "select CY_CYCLE as TestSet from CYCLE where CY_FOLDER_ID = " + TestSetFolder.NodeID;
+        'Recordset records = Command.Execute();
+        'Console.WriteLine("Folder {0} contains {1} testsets", testSetFolderPath, records.RecordCount);
+
+
+        'are you sure you want to copy?'
+        strMsg = "Wykryte TestScenariusze: " & tsList.Count & Chr(10)
+        strMsg = strMsg & "w katalogu: " & tsFolder.Path & Chr(10)
+        strMsg = strMsg & "Czy zmienić statun na 'Ready to start'?"
+        'Result = MsgBox(strMsg, vbYesNo, "Zmiana statusu na 'Ready to start'")
+
+        ' If Result = vbNo Then
+        ' Exit Function
+        ' End If
+
+
+
+        '-------------------------------------------------?-----
+        'Cleanup for objects (just to be sure)
+        TSetFact = Nothing
+        tsTreeMgr = Nothing
+        tsFolder = Nothing
+        tsList = Nothing
+        TestSetFound = Nothing
+
+
+        tdConnection.Disconnect()
+        tdConnection.Logout()
+        tdConnection.ReleaseConnection()
+        On Error GoTo 0
+
+
+
+    End Sub
+
+    Private Sub Button6_Click(sender As Object, e As EventArgs) Handles Button6.Click
+        On Error Resume Next
+        Dim ClassCustomizationList As New CustomizationList
+        Call ClassCustomizationList.GetCustomizationList("PR_Envirnoment")
+        '        '#Lista List do wywołań które można modyfikować
+        '        PR_Envirnoment
+        '        PR_ListaVDI
+        '        PR_TestGroup
+        '        PR_System
+
+        '        '#Tych nie implementujemy Do zmian, ale są
+        '        Plan Status
+        '        PR_DataSource
+        '        PR_LogLevel
+        '        PR_RunPriority
+        '        Test Running Status
+        On Error GoTo 0
+    End Sub
+
+    Private Sub Button7_Click(sender As Object, e As EventArgs) Handles Button7.Click
+        Dim ClassCustomizationList As New CustomizationList
+        On Error Resume Next
+        Call ClassCustomizationList.AddItemToList("PR_ListaVDI", "VDI-10") '1 wartość  z listy poniżej, 2 wartość Input Box
+        On Error GoTo 0
+    End Sub
 End Class
 
 Public Class TDConnectivity
     Public tdConnection As Object
+
     Public nPath As String
 
     Public Sub ConnectToTD()
@@ -368,15 +512,17 @@ Public Class TDConnectivity
         Dim qcProject As String
 
         qcURL = "http://profive1v5.radom.tsunami:8080/qcbin"
-        qcID = "mantoniak"
-        qcPWD = "mantoniak"
+        qcID = "uft"
+        qcPWD = "uft"
         qcDomain = "UFT"
         qcProject = "UFT"
-        nPath = Trim("Root\Automaty") ' test set folder
+        nPath = Trim("Root") ' test set folder
         '-----------------------------------------------------Connect to Quality Center --------------------------------------------------------
-
+        'tdConnection
         'Create a Connection object to connect to Quality Center
-        tdConnection = CreateObject("TDApiOle80.TDConnection")
+        'tdConnection = CreateObject("TDApiOle80.TDConnection")
+        Dim tdConnection = New TDAPIOLELib.TDConnection
+        ' tdConnection.
         'Initialise the Quality center connection
         tdConnection.InitConnectionEx(qcURL)
         'Authenticating with username and password
@@ -516,7 +662,8 @@ End Class
 Public Class StatusChange
     Public clTDConnectivity As New TDConnectivity
 
-    Sub ChangeStatusScenario(ByVal qcTSId As Long, ByVal qcStatus As String, ByVal sLog As String, Optional ByVal sAttachment As String = "")
+    Sub ChangeStatusScenario(ByVal qcTSId As Long, ByVal qcStatus As String, ByVal sLog As String,
+                             Optional ByVal sAttachment As String = "C:\\test.txt")
         Call clTDConnectivity.ConnectToTD()
         Dim dDateToday As String = Today & "_" & Now.ToLongTimeString
         Dim TSetFact, TestSetFilter, TestSetList, myTestSet
@@ -560,7 +707,8 @@ End Class
 Public Class StatusChangeCase
     Public clTDConnectivity As New TDConnectivity
 
-    Sub ChangeStatusCase(ByVal qcTSId As Long, ByVal qcTCId As Long, ByVal qcStatus As String, ByVal sLog As String, Optional ByVal sAttachment As String = "1")
+    Sub ChangeStatusCase(ByVal qcTSId As Long, ByVal qcTCId As Long, ByVal qcStatus As String,
+                         ByVal sLog As String, Optional ByVal sAttachment As String = "C:\\test.txt")
         Call clTDConnectivity.ConnectToTD()
 
         Dim TSetFact, TestSetFilter, TestSetList, myTestSet, TSTestFactory
@@ -595,6 +743,7 @@ Public Class StatusChangeCase
                 theRun.Status = qcStatus
                 ' theRun.CopyDesignSteps
                 theRun.Post
+
                 If sAttachment <> "" Then
                     attachF = theRun.Attachments
                     theAttachment = attachF.AddItem(System.DBNull.Value)
@@ -675,4 +824,345 @@ Public Class AddAttachments
         Call clTDConnectivity.DisconnectfromTD()
 
     End Sub
+End Class
+
+Public Class Copy_TPtoTL
+
+    Public clTDConnectivity As New TDConnectivity
+    Sub CopyTPlanToTLab()
+        Call clTDConnectivity.ConnectToTD()
+        Dim Treemgr, myTestFact, myTestFilter, TestFactory, tdc, treemanager
+        Dim myTestList, strMsg, myFolderPath, myFolderID
+        Dim Result
+
+        'Dim treemanager As TDAPIOLELib.TreeManager
+
+
+        myFolderID = "1001"
+        myFolderPath = "Subject\test"
+        tdc = clTDConnectivity.tdConnection
+
+        Treemgr = tdc.treemanager
+        myTestFact = tdc.TestFactory
+        myTestFilter = myTestFact.Filter
+
+        ' build filter regarding the last known folder'
+        myTestFilter.Filter("TS_SUBJECT") = "^\" & myFolderPath & "^"
+        myTestFilter.Order("TS_SUBJECT") = 1
+        myTestFilter.Order("TS_NAME") = 2
+        myTestList = myTestFact.NewList(myTestFilter.Text)
+
+        'are you sure you want to copy?'
+        strMsg = "Wykryte TestCase: " & myTestList.Count & Chr(10)
+        strMsg = strMsg & "w katalogu: " & myFolderPath & Chr(10)
+        strMsg = strMsg & "Czy skopiować do TestLab?"
+        Result = MsgBox(strMsg, vbYesNo, "Kopiowanie TestPlan do TestLab")
+
+        If Result = vbNo Then
+            Exit Sub
+        End If
+        Dim actTest
+        Dim mySNode, myPath, sTSVDIName, sTSVDINum, sStartDate, sTSDataSource, sTSPriorytet, sTestGroup
+        Dim sTSEmail, sTSEnvirnoment, sTSLogLevel, sPeriodic, sTSReUseData, sRepeatingDate, sTSSystem, sName
+        For Each actTest In myTestList
+            'Node of Subject-Folder
+            mySNode = actTest.Field("TS_Subject")
+            myPath = mySNode.Path
+            sTSVDIName = actTest.Field("TS_USER_01")           'Nazwa maszyny
+            sTSVDINum = actTest.Field("TS_USER_02")      'Maksymalna ilość maszyn
+            sStartDate = actTest.Field("TS_USER_03")              'Data uruchomienia
+            sTSDataSource = actTest.Field("TS_USER_04")           'Wybór źródła danych
+            sTSPriorytet = actTest.Field("TS_USER_05")               'Priorytet uruchomienia
+            sTestGroup = actTest.Field("TS_USER_06")              'Grupa Testów
+            sTSEmail = actTest.Field("TS_USER_07")              'Wyślij mail
+            sTSEnvirnoment = actTest.Field("TS_USER_08")              'Środowisko
+            sTSLogLevel = actTest.Field("TS_USER_09")                'Poziom logowania
+            sPeriodic = actTest.Field("TS_USER_10")                'Cykliczność
+            sTSReUseData = actTest.Field("TS_USER_11")              'Reużyj dane
+            sRepeatingDate = actTest.Field("TS_Description")      'DatyCykliczności
+            sTSSystem = actTest.Field("TS_USER_12")               'Testowany System
+            sName = actTest.Field("TS_NAME")
+
+            strMsg = "sTSVDIName: " & sTSVDIName & Chr(10)
+            strMsg = strMsg & "sTSVDINum: " & sTSVDINum & Chr(10)
+            strMsg = strMsg & "sStartDate: " & sStartDate & Chr(10)
+            strMsg = strMsg & "sTSDataSource: " & sTSDataSource & Chr(10)
+            strMsg = strMsg & "sTSPriorytet: " & sTSPriorytet & Chr(10)
+            strMsg = strMsg & "sTestGroup: " & sTestGroup & Chr(10)
+            strMsg = strMsg & "sTSEmail: " & sTSEmail & Chr(10)
+            strMsg = strMsg & "sTSEnvirnoment: " & sTSEnvirnoment & Chr(10)
+            strMsg = strMsg & "sTSLogLevel: " & sTSLogLevel & Chr(10)
+            strMsg = strMsg & "sPeriodic: " & sPeriodic & Chr(10)
+            strMsg = strMsg & "sTSReUseData: " & sTSReUseData & Chr(10)
+            strMsg = strMsg & "sRepeatingDate: " & sRepeatingDate & Chr(10)
+            strMsg = strMsg & "sTSSystem: " & sTSSystem & Chr(10)
+            strMsg = strMsg & "myPath: " & myPath & Chr(10)
+            'strMSG = strMSG & "mySNode: " & mySNode & Chr(10)
+            strMsg = strMsg & "myName: " & sName
+
+            MsgBox(strMsg)
+
+            'build testset and add testinstance
+            Result = StworzTestCase(myPath, actTest, sTSVDIName, sTSVDINum, sStartDate, sTSDataSource, sTSPriorytet, sTestGroup, sTSEmail,
+            sTSEnvirnoment, sTSLogLevel, sPeriodic, sTSReUseData, sRepeatingDate, sTSSystem)
+        Next 'Testcase
+
+        'now the end is near
+        MsgBox("Kopiowanie zakończone", vbOKOnly)
+        Call clTDConnectivity.DisconnectfromTD()
+        myTestList = Nothing
+        myTestFilter = Nothing
+        myTestFact = Nothing
+    End Sub
+
+
+    Function StworzTestCase(sPath, sTestCase, sTSVDIName, sTSVDINum, sStartDate, sTSDataSource, sTSPriorytet, sTestGroup, sTSEmail,
+    sTSEnvirnoment, sTSLogLevel, sPeriodic, sTSReUseData, sRepeatingDate, sTSSystem)
+
+        Dim tdcF
+        Dim TStmgr
+        Dim myRoot
+        Dim newTSTest
+        Dim myTSTest, testSetFilter, TSTestF, TSTestList, testSetF, folder, newNode, build_case
+        Dim subjectArray, NewPath, OldPath, CurrentSubName
+        Dim TSList, testSet1, foundTS, currentPath
+
+        Dim iDateFolder = 1 'jeśli 1 to kreowanie folderów z NOW
+        'On Error Resume Next
+        ' Preparation
+        tdcF = clTDConnectivity.tdConnection
+        TStmgr = tdcF.TestSetTreeManager
+        ' Split path for loop
+        subjectArray = Split(sPath, "\")
+
+        ' initialize variable for path
+        ' Remember: Test Plan begins with Subject and Test Lab with Root!
+        NewPath = "Root"
+        OldPath = ""
+
+        If iDateFolder = 1 Then
+            Dim NewFolder = Now()
+            NewPath = Trim(NewPath) & "\" & NewFolder
+            On Error Resume Next
+            'search Folder
+            newNode = TStmgr.NodeByPath(NewPath)
+            On Error GoTo 0
+            If newNode Is Nothing Then
+                TStmgr = Nothing
+                TStmgr = tdcF.TestSetTreeManager
+                myRoot = TStmgr.Root
+                newNode = myRoot.addNode(NewFolder)
+                newNode.post
+                newNode.Refresh
+
+            End If 'new Node
+        End If
+        For idx = 1 To UBound(subjectArray)
+            'save path
+            OldPath = NewPath
+
+            'get new folder
+            CurrentSubName = subjectArray(idx)
+            'build new path
+            NewPath = Trim(NewPath) & "\" & CurrentSubName
+            On Error Resume Next
+            newNode = Nothing
+            'search Folder
+            newNode = TStmgr.NodeByPath(NewPath)
+            On Error GoTo 0
+            'create folder if it does not exist
+
+            If newNode Is Nothing Then
+                TStmgr = Nothing
+                TStmgr = tdcF.TestSetTreeManager
+
+                If idx = 1 And iDateFolder <> 1 Then
+                    myRoot = TStmgr.Root
+                Else
+                    myRoot = TStmgr.NodeByPath(OldPath)
+                End If ' idx'
+
+                newNode = myRoot.addNode(CurrentSubName)
+                newNode.post
+            End If 'new Node
+
+            ' if the current folder is the last folder of the array
+            ' create a testset (if necessary) and add the current test
+
+            If idx = UBound(subjectArray) Then
+                'Check: Does the testset exist?    ' create a filter with Folder-id and -name
+                testSetF = newNode.TestSetFactory
+                testSetFilter = testSetF.Filter
+                testSetFilter.Filter("CY_FOLDER_ID") = newNode.Nodeid
+                testSetFilter.Filter("CY_CYCLE") = CurrentSubName
+                TSList = testSetF.newList(testSetFilter.Text)
+
+                'Add Testset only if necessary
+
+                If TSList.Count = 0 Then
+                    'MsgBox("Add Testset")
+                    'nothing found'
+                    testSet1 = testSetF.AddItem(System.DBNull.Value)
+                    testSet1.Name = CurrentSubName
+                    testSet1.Status = "Open"
+
+                    testSet1.Field("CY_USER_01") = sTSVDIName         'Nazwa maszyny
+                    testSet1.Field("CY_USER_02") = sTSVDINum    'Maksymalna ilość maszyn
+                    testSet1.Field("CY_USER_03") = sStartDate            'Data uruchomienia
+                    testSet1.Field("CY_USER_04") = sTSDataSource         'Wybór źródła danych
+                    testSet1.Field("CY_USER_05") = sTSPriorytet             'Priorytet uruchomienia
+                    testSet1.Field("CY_USER_06") = sTestGroup            'Grupa Testów
+                    testSet1.Field("CY_USER_08") = sTSEmail            'Wyślij mail
+                    testSet1.Field("CY_USER_09") = sTSEnvirnoment            'Środowisko
+                    testSet1.Field("CY_USER_10") = sTSLogLevel              'Poziom logowania
+                    testSet1.Field("CY_USER_11") = sPeriodic              'Cykliczność
+                    testSet1.Field("CY_COMMENT") = sRepeatingDate    'DatyCykliczności
+                    testSet1.Field("CY_USER_12") = sTSSystem               'Testowany System
+                    testSet1.Field("CY_USER_14") = sTSReUseData            'Reużyj dane
+                    testSet1.Post
+                    testSet1.refresh
+                Else
+                    'else get it
+                    testSet1 = TSList.Item(1)
+                End If 'TSList
+
+                'Check: testinstance
+                'DO not use FindTestInstance (way too much overhead)
+                TSTestF = testSet1.TSTestFactory
+                TSTestList = TSTestF.newList("")
+
+                'initialize marker
+                foundTS = 0
+
+                If TSTestList.Count > 0 Then
+
+                    For Each myTSTest In TSTestList
+                        If myTSTest.testId = Trim(sTestCase.ID & " ") Then
+                            foundTS = 1
+                        End If
+                    Next ' myTSTest
+                End If ' TSTestList
+
+                'Add Test if necessary
+
+                If foundTS = 0 Then
+                    'nothing found => add test to testset
+                    newTSTest = TSTestF.AddItem(sTestCase.ID)
+                    newTSTest.Post
+                End If ' foundTS
+            End If ' idx
+
+            '-------------------------------------------------?-----
+            'Cleanup for objects (just to be sure)
+            newTSTest = Nothing
+            myTSTest = Nothing
+            testSetFilter = Nothing
+            TSTestF = Nothing
+            TSTestList = Nothing
+            testSetFilter = Nothing
+            testSetF = Nothing
+            folder = Nothing
+            newNode = Nothing
+
+        Next 'idx
+
+        On Error GoTo 0
+        build_case = True
+    End Function
+
+End Class
+
+Public Class CustomizationList
+    Sub GetCustomizationList(ListName As String)
+        On Error Resume Next
+        Dim qcURL As String
+        Dim qcID As String
+        Dim qcPWD As String
+        Dim qcDomain As String
+        Dim qcProject As String
+        Dim TestSetFound, strMsg, iFolderID
+
+        Dim tdConnection = New TDAPIOLELib.TDConnection
+        Dim ret
+
+        qcURL = "http://profive1v5.radom.tsunami:8080/qcbin"
+        qcID = "uft"
+        qcPWD = "uft"
+        qcDomain = "UFT"
+        qcProject = "UFT"
+        tdConnection.InitConnectionEx(qcURL)
+        tdConnection.Login(qcID, qcPWD)
+        tdConnection.Connect(qcDomain, qcProject)
+
+        Dim cust As Customization
+        Dim custFields As CustomizationFields
+        Dim aCustField As CustomizationField
+        Dim custlists As CustomizationLists
+        Dim aCustList 'As CustomizationLists
+        Dim aListNode As TDAPIOLELib.CustomizationListNode
+        'Dim listName$, i%
+        Dim msg As String
+        Dim c As CustomizationListNode
+
+        cust = tdConnection.Customization
+        cust.Load()
+        custlists = cust.Lists
+        aCustList = custlists.List(ListName)
+        aListNode = aCustList.RootNode
+
+        For Each c In aListNode.Children
+            MsgBox(c.Name) 'tutaj dodać jakaś funkcję ładującą i wyświetlającą w MSSQL, tudzież zwrotka jako lista
+        Next
+        'cust.Commit()
+
+        tdConnection.Disconnect()
+        tdConnection.Logout()
+        tdConnection.ReleaseConnection()
+        On Error GoTo 0
+    End Sub
+
+    Function AddItemToList(ListName As String, ItemName As String) _
+      As CustomizationListNode
+        On Error Resume Next
+        Dim qcURL As String
+        Dim qcID As String
+        Dim qcPWD As String
+        Dim qcDomain As String
+        Dim qcProject As String
+        Dim TestSetFound, strMsg, iFolderID
+        Dim tdConnection = New TDAPIOLELib.TDConnection
+        Dim ret
+
+        qcURL = "http://profive1v5.radom.tsunami:8080/qcbin"
+        qcID = "uft"
+        qcPWD = "uft"
+        qcDomain = "UFT"
+        qcProject = "UFT"
+        tdConnection.InitConnectionEx(qcURL)
+        tdConnection.Login(qcID, qcPWD)
+        tdConnection.Connect(qcDomain, qcProject)
+
+        Dim cust As Customization
+        Dim custFields As CustomizationFields
+        Dim aCustField As CustomizationField
+        Dim custlists As CustomizationLists
+        Dim aCustList 'As CustomizationLists
+        Dim aListNode As TDAPIOLELib.CustomizationListNode
+        Dim msg As String
+        Dim c As CustomizationListNode
+
+        cust = tdConnection.Customization
+        cust.Load()
+        custlists = cust.Lists
+        aCustList = custlists.List(ListName)
+        aListNode = aCustList.RootNode
+        AddItemToList = aListNode.AddChild(ItemName)
+        cust.Commit()
+
+        tdConnection.Disconnect()
+        tdConnection.Logout()
+        tdConnection.ReleaseConnection()
+        On Error GoTo 0
+    End Function
+
 End Class
