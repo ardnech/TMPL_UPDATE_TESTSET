@@ -16,7 +16,7 @@ Public Class Form1
         Dim sTS_Name As String, sTS_Path As String, sTS_Status As String, sTS_ALM_ID As Long
         Dim sTS_Group As String, sTSPriorytet As String, sTSEmail As String, sTSEnvirnoment As String, sTSVDINum As String, sTSSystem As String
         Dim sTSLogLevel As String, sTSVDIName As String, sTSDataSource As String, sTS_Param As String, sTSReUseData As String
-        Dim sTSRepeating As String, aRepeatingDate As Array, sRepeatingDate As String = ""
+        Dim sTSRepeating As String, aRepeatingDate As Array, sRepeatingDate As String = "", sTSJira As String
 
         Dim sTsTcCorrectDownload As String = "Not Completed"
         Dim sTsTcIncorrectTechnicalDownload As String = "Reject"
@@ -495,6 +495,20 @@ ErrorHandler:
         Dim ClassCustomizationList As New CustomizationList
         On Error Resume Next
         Call ClassCustomizationList.AddItemToList("PR_ListaVDI", "VDI-10") '1 wartość  z listy poniżej, 2 wartość Input Box
+        On Error GoTo 0
+    End Sub
+
+    Private Sub Button8_Click(sender As Object, e As EventArgs) Handles Button8.Click
+        Dim PeselGenerator As New GeneratoryDanych
+        On Error Resume Next
+        MsgBox(PeselGenerator.GetPesel())
+        On Error GoTo 0
+    End Sub
+
+    Private Sub Button9_Click(sender As Object, e As EventArgs) Handles Button9.Click
+        Dim NipGenerator As New GeneratoryDanych
+        On Error Resume Next
+        MsgBox(NipGenerator.GetNIP())
         On Error GoTo 0
     End Sub
 End Class
@@ -1165,4 +1179,106 @@ Public Class CustomizationList
         On Error GoTo 0
     End Function
 
+End Class
+
+Public Class GeneratoryDanych
+    Function GetPesel() As Long
+        'cyfry [1-6] – data urodzenia : Kolejne pary cyfr oznaczają kolejno rok, miesiąc i dzień urodzenia.
+        'cyfry [7-9] – numer serii(możemy go traktować jako pojedyncze cyfry). Mogą być to dowolne cyfry. Mają one znaczenie tylko przy obliczaniu cyfry kontrolnej.
+        'cyfra [10] – płeć. Cyfry parzyste wraz z zerem oznaczają płeć żenską, natomiast wszystkie cyfry nieparzyste oznaczają płeć męską.
+        'cyfra [11] – cyfra kontrolna, służąca do weryfikacji numeru PESEL
+        Dim sPESEL As String
+        Dim dDataUrodzenia
+        Dim iWypelnienie1 As Integer, iCyfraKontrolna As Integer
+        Dim iPlec As Integer
+
+        dDataUrodzenia = Right(Replace(RandomDate("1900-01-01", "1999-12-31"), "-", ""), 6) 'GetBirthDate()
+        iWypelnienie1 = Randomize("100", "999") 'środek bez weryfikacji 3 cyfry
+        iPlec = Randomize("0", "9") 'płeć
+        For i = 0 To 10
+            iCyfraKontrolna = i
+            sPESEL = dDataUrodzenia & iWypelnienie1 & iPlec & iCyfraKontrolna
+            GetPesel = CLng(sPESEL)
+            If CzyPESELPoprawny(sPESEL) = True Then Exit For
+        Next
+        Return GetPesel
+    End Function
+    Function GetNIP() As Long
+        Dim sNIP As String
+        Dim iWypelnienie1 As Integer, iCyfraKontrolna As Integer
+        iWypelnienie1 = Randomize("0", "999999999") 'środek bez weryfikacji
+        For i = 1 To 9
+            If Len(iWypelnienie1) < 9 Then Exit For
+            iWypelnienie1 = "0" & iWypelnienie1
+        Next
+
+        For i = 0 To 9
+            iCyfraKontrolna = i
+            sNIP = iWypelnienie1 & iCyfraKontrolna
+            GetNIP = CLng(sNIP)
+            If CzyNIPPoprawny(sNIP) = True Then Exit For
+        Next
+        Return GetNIP
+    End Function
+
+    Public Function RandomDate(ByVal StartDate, ByVal EndDate) As Date
+        'returns random date between start date and now
+
+        If Not IsDate(StartDate) Then Exit Function
+        If Not IsDate(EndDate) Then Exit Function
+        Dim dtStartDate = CDate(StartDate)
+        Dim dtEndDate = CDate(EndDate)
+        Dim iDifferential = DateDiff(DateInterval.Day, dtStartDate, dtEndDate)
+        iDifferential = New Random(System.DateTime.Now.Millisecond).Next(0, iDifferential)
+        dtStartDate = DateAdd(DateInterval.Day, iDifferential, dtStartDate)
+        Return dtStartDate
+    End Function
+
+    Public Function Randomize(ByVal liczbaOd As Long, ByVal liczbaDo As Long) As Long
+        Static Generator As System.Random = New System.Random()
+        Return Generator.Next(liczbaOd, liczbaDo)
+    End Function
+
+    '   Function Randomizeold(liczbaOd As Integer, liczbaDo As Integer) As Long
+    '       Randomize = Int(Rnd() * (liczbaDo - liczbaOd) + liczbaOd)
+    '   End Function
+
+    Function CzyPESELPoprawny(sPESEL As String) As Boolean
+        Dim i As Integer, iSumaKon As Integer
+        On Error GoTo Err_CzyPESELPoprawny
+        Dim iWagi = New Integer() {1, 3, 7, 9, 1, 3, 7, 9, 1, 3}
+        'If Len(sPESEL) <> 11 Then Err.Raise 1 + 512
+        For i = LBound(iWagi) To UBound(iWagi)
+            iSumaKon = iSumaKon + (iWagi(i) * CInt(Mid(sPESEL, i + 1, 1)))
+        Next i
+        iSumaKon = iSumaKon Mod 10
+        iSumaKon = 10 - iSumaKon
+        CzyPESELPoprawny = CBool(CInt(Mid(sPESEL, 11, 1)) = iSumaKon)
+Exit_CzyPESELPoprawny:
+        Exit Function
+Err_CzyPESELPoprawny:
+        CzyPESELPoprawny = False
+        Err.Clear()
+        Resume Exit_CzyPESELPoprawny
+    End Function
+
+    Function CzyNIPPoprawny(sNIP As String) As Boolean
+        Dim i As Integer, iSumaKon As Integer
+
+        On Error GoTo Err_CzyNIPPoprawny
+        Dim iWagi = New Integer() {6, 5, 7, 2, 3, 4, 5, 6, 7}
+        'If Len(sNIP) <> 10 Then Err.Raise 1 + 512
+        For i = LBound(iWagi) To UBound(iWagi)
+            iSumaKon = iSumaKon + (iWagi(i) * CInt(Mid(sNIP, i + 1, 1)))
+        Next i
+        iSumaKon = iSumaKon Mod 11
+        CzyNIPPoprawny = CBool(CInt(Mid(sNIP, 10, 1)) = iSumaKon)
+
+Exit_CzyNIPPoprawny:
+        Exit Function
+Err_CzyNIPPoprawny:
+        CzyNIPPoprawny = False
+        Err.Clear()
+        Resume Exit_CzyNIPPoprawny
+    End Function
 End Class
