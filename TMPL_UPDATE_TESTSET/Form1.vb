@@ -511,6 +511,19 @@ ErrorHandler:
         MsgBox(NipGenerator.GetNIP())
         On Error GoTo 0
     End Sub
+
+    Private Sub Button10_Click(sender As Object, e As EventArgs) Handles Button10.Click
+        Dim RegonGenerator As New GeneratoryDanych
+        ' On Error Resume Next
+        MsgBox(RegonGenerator.GetREGON())
+        On Error GoTo 0
+    End Sub
+
+    Private Sub Button11_Click(sender As Object, e As EventArgs) Handles Button11.Click
+        Dim DowodGenerator As New GeneratoryDanych
+        ' On Error Resume Next
+        MsgBox(DowodGenerator.GetDowod())
+    End Sub
 End Class
 
 Public Class TDConnectivity
@@ -682,7 +695,7 @@ Public Class StatusChange
         Dim dDateToday As String = Today & "_" & Now.ToLongTimeString
         Dim TSetFact, TestSetFilter, TestSetList, myTestSet
         Dim attachF, theAttachment
-        TSetFact = clTDConnectivity.tdConnection.TestSetFactory
+        TSetFact = New TDAPIOLELib.TestSetFactory
         TestSetFilter = TSetFact.Filter
         TestSetFilter.Filter("CY_CYCLE_ID") = qcTSId
 
@@ -1189,36 +1202,94 @@ Public Class GeneratoryDanych
         'cyfra [11] – cyfra kontrolna, służąca do weryfikacji numeru PESEL
         Dim sPESEL As String
         Dim dDataUrodzenia
-        Dim iWypelnienie1 As Integer, iCyfraKontrolna As Integer
+        Dim iWypelnienie1 As Integer
         Dim iPlec As Integer
 
         dDataUrodzenia = Right(Replace(RandomDate("1900-01-01", "1999-12-31"), "-", ""), 6) 'GetBirthDate()
         iWypelnienie1 = Randomize("100", "999") 'środek bez weryfikacji 3 cyfry
         iPlec = Randomize("0", "9") 'płeć
-        For i = 0 To 10
-            iCyfraKontrolna = i
-            sPESEL = dDataUrodzenia & iWypelnienie1 & iPlec & iCyfraKontrolna
-            GetPesel = CLng(sPESEL)
-            If CzyPESELPoprawny(sPESEL) = True Then Exit For
-        Next
-        Return GetPesel
+        sPESEL = dDataUrodzenia & iWypelnienie1 & iPlec
+
+        Dim iSumaKon As Integer
+        Dim iWagi = New Integer() {1, 3, 7, 9, 1, 3, 7, 9, 1, 3}
+        For i = LBound(iWagi) To UBound(iWagi)
+            iSumaKon = iSumaKon + (iWagi(i) * CInt(Mid(sPESEL, i + 1, 1)))
+        Next i
+        iSumaKon = iSumaKon Mod 10
+        iSumaKon = 10 - iSumaKon
+        sPESEL = sPESEL & iSumaKon
+
+        Return sPESEL
     End Function
+
     Function GetNIP() As Long
-        Dim sNIP As String
-        Dim iWypelnienie1 As Integer, iCyfraKontrolna As Integer
+        Dim sNIP As String, iLen As Integer
+        Dim iWypelnienie1 As Integer
         iWypelnienie1 = Randomize("0", "999999999") 'środek bez weryfikacji
         For i = 1 To 9
-            If Len(iWypelnienie1) < 9 Then Exit For
-            iWypelnienie1 = "0" & iWypelnienie1
+            iLen = (CStr(iWypelnienie1)).Length
+            If iLen = 9 Then Exit For
+            iWypelnienie1 = iWypelnienie1 & "0"
         Next
 
-        For i = 0 To 9
-            iCyfraKontrolna = i
-            sNIP = iWypelnienie1 & iCyfraKontrolna
-            GetNIP = CLng(sNIP)
-            If CzyNIPPoprawny(sNIP) = True Then Exit For
+        sNIP = iWypelnienie1
+        Dim iSumaKon As Integer
+        Dim iWagi = New Integer() {6, 5, 7, 2, 3, 4, 5, 6, 7}
+        For i = LBound(iWagi) To UBound(iWagi)
+            iSumaKon = iSumaKon + (iWagi(i) * CInt(Mid(sNIP, i + 1, 1)))
+        Next i
+        iSumaKon = iSumaKon Mod 11
+        If iSumaKon > 9 Then GetNIP() 'jesli z modulo wychodzi 10 powtórz
+
+        sNIP = sNIP & iSumaKon
+        Return sNIP
+    End Function
+
+    Function GetREGON() As Long
+        Dim sRegon As String, iLen As Integer
+        Dim iWypelnienie1 As Integer
+        iWypelnienie1 = Randomize("0", "99999999") 'środek bez weryfikacji
+        For i = 1 To 8
+            iLen = (CStr(iWypelnienie1)).Length
+            If iLen = 8 Then Exit For
+            iWypelnienie1 = iWypelnienie1 & "0"
         Next
-        Return GetNIP
+
+        Dim iSumaKon As Integer
+        Dim iWagi = New Integer() {8, 9, 2, 3, 4, 5, 6, 7}
+        sRegon = iWypelnienie1
+
+        For i = LBound(iWagi) To UBound(iWagi)
+            iSumaKon = iSumaKon + (iWagi(i) * CInt(Mid(sRegon, i + 1, 1)))
+        Next i
+        iSumaKon = iSumaKon Mod 11
+        If iSumaKon = 10 Then iSumaKon = 0
+        sRegon = sRegon & iSumaKon
+
+        Return sRegon
+    End Function
+
+    Function GetDowod() As String
+        Dim sDowod As String
+        Dim iSumaKon As Integer
+        Dim iWagi = New Integer() {7, 3, 1, 7, 3} '7, 3, 1
+        Dim sChar1 As String() = GetChar(Randomize("1", "26")).Split(",")
+        Dim sChar2 As String() = GetChar(Randomize("1", "26")).Split(",")
+        Dim sChar3 As String() = GetChar(Randomize("1", "26")).Split(",")
+        sDowod = Randomize("10000", "99999")
+
+        iSumaKon = sChar1(1) * 7
+        iSumaKon = iSumaKon + (sChar2(1) * 3)
+        iSumaKon = iSumaKon + (sChar3(1) * 1)
+
+        For i = LBound(iWagi) To UBound(iWagi)
+            iSumaKon = iSumaKon + (iWagi(i) * CInt(Mid(sDowod, i + 1, 1)))
+        Next i
+        iSumaKon = iSumaKon Mod 10
+
+        sDowod = sChar1(0) & sChar2(0) & sChar3(0) & iSumaKon & sDowod
+
+        Return sDowod
     End Function
 
     Public Function RandomDate(ByVal StartDate, ByVal EndDate) As Date
@@ -1239,46 +1310,63 @@ Public Class GeneratoryDanych
         Return Generator.Next(liczbaOd, liczbaDo)
     End Function
 
-    '   Function Randomizeold(liczbaOd As Integer, liczbaDo As Integer) As Long
-    '       Randomize = Int(Rnd() * (liczbaDo - liczbaOd) + liczbaOd)
-    '   End Function
-
-    Function CzyPESELPoprawny(sPESEL As String) As Boolean
-        Dim i As Integer, iSumaKon As Integer
-        On Error GoTo Err_CzyPESELPoprawny
-        Dim iWagi = New Integer() {1, 3, 7, 9, 1, 3, 7, 9, 1, 3}
-        'If Len(sPESEL) <> 11 Then Err.Raise 1 + 512
-        For i = LBound(iWagi) To UBound(iWagi)
-            iSumaKon = iSumaKon + (iWagi(i) * CInt(Mid(sPESEL, i + 1, 1)))
-        Next i
-        iSumaKon = iSumaKon Mod 10
-        iSumaKon = 10 - iSumaKon
-        CzyPESELPoprawny = CBool(CInt(Mid(sPESEL, 11, 1)) = iSumaKon)
-Exit_CzyPESELPoprawny:
-        Exit Function
-Err_CzyPESELPoprawny:
-        CzyPESELPoprawny = False
-        Err.Clear()
-        Resume Exit_CzyPESELPoprawny
-    End Function
-
-    Function CzyNIPPoprawny(sNIP As String) As Boolean
-        Dim i As Integer, iSumaKon As Integer
-
-        On Error GoTo Err_CzyNIPPoprawny
-        Dim iWagi = New Integer() {6, 5, 7, 2, 3, 4, 5, 6, 7}
-        'If Len(sNIP) <> 10 Then Err.Raise 1 + 512
-        For i = LBound(iWagi) To UBound(iWagi)
-            iSumaKon = iSumaKon + (iWagi(i) * CInt(Mid(sNIP, i + 1, 1)))
-        Next i
-        iSumaKon = iSumaKon Mod 11
-        CzyNIPPoprawny = CBool(CInt(Mid(sNIP, 10, 1)) = iSumaKon)
-
-Exit_CzyNIPPoprawny:
-        Exit Function
-Err_CzyNIPPoprawny:
-        CzyNIPPoprawny = False
-        Err.Clear()
-        Resume Exit_CzyNIPPoprawny
+    Function GetChar(iZnak) As String
+        ' W literach serii nie używa się liter 'O' i 'Q'. Jeżeli więc ktoś poda takie litery w serii to z pewnością dane są błędne.
+        Dim sZnak As String = "A,10"
+        Select Case iZnak
+            Case 1
+                sZnak = ("A,10")
+            Case 2
+                sZnak = ("B,11")
+            Case 3
+                sZnak = ("C,12")
+            Case 4
+                sZnak = ("D,13")
+            Case 5
+                sZnak = ("E,14")
+            Case 6
+                sZnak = ("F,15")
+            Case 7
+                sZnak = ("G,16")
+            Case 8
+                sZnak = ("H,17")
+            Case 9
+                sZnak = ("I,18")
+            Case 10
+                sZnak = ("J,19")
+            Case 11
+                sZnak = ("K,20")
+            Case 12
+                sZnak = ("L,21")
+            Case 13
+                sZnak = ("M,22")
+            Case 14
+                sZnak = ("N,23")
+            Case 15
+             '   sZnak = ("O,24") 'pobierze wartość domyślną A10
+            Case 16
+                sZnak = ("P,25")
+            Case 17
+               ' sZnak = ("Q,26")'pobierze wartość domyślną A10
+            Case 18
+                sZnak = ("R,27")
+            Case 19
+                sZnak = ("S,28")
+            Case 20
+                sZnak = ("T,29")
+            Case 21
+                sZnak = ("U,30")
+            Case 22
+                sZnak = ("V,31")
+            Case 23
+                sZnak = ("W,32")
+            Case 24
+                sZnak = ("X,33")
+            Case 25
+                sZnak = ("Y,34")
+            Case 26
+                sZnak = ("Z,35")
+        End Select
+        Return sZnak
     End Function
 End Class
