@@ -68,7 +68,8 @@ Public Class Form1
             'Debug.Print(StrTok(testsetfound.Field("CY_COMMENT"), separateChars1, separateChars2))
 
             sTS_Status = TestSetFound.Status
-            If UCase(sTS_Status) = UCase("Ready to start") Then
+            If UCase(sTS_Status) = UCase("Ready to start") And TestSetFound.IsLocked = False Then
+                TestSetFound.LockObject
                 sTS_Name = TestSetFound.Name
                 sTS_Path = tsFolder.path
                 sTS_ALM_ID = TestSetFound.ID
@@ -80,7 +81,7 @@ Public Class Form1
                 sLog = sLog & " | " & "Status zmieniany z: " & sTS_Status & " na: " & sTsTcProcessing
 
                 clStatusChange.ChangeStatusScenario(sTS_ALM_ID, sTsTcProcessing, sLog)
-
+                TestSetFound.UnlockObject
                 'Grupa Testów	Cycle	CY_USER_06 'QTP UFT SELENIUM
                 If IsNothing(TestSetFound.Field("CY_USER_06")) Then
                     Err.Number = 200
@@ -255,7 +256,7 @@ Public Class Form1
 
         'Zamknięcie połączenia z DB
         Call clTDConnectivity.DisconnectfromTD()
-
+        MsgBox("Done")
         Exit Sub
 
 ErrorHandler:
@@ -543,12 +544,12 @@ Public Class TDConnectivity
         qcPWD = "uft"
         qcDomain = "UFT"
         qcProject = "UFT"
-        nPath = Trim("Root") ' test set folder
+        nPath = Trim("Root\NoweTesty") ' test set folder
         '-----------------------------------------------------Connect to Quality Center --------------------------------------------------------
         'tdConnection
         'Create a Connection object to connect to Quality Center
-        'tdConnection = CreateObject("TDApiOle80.TDConnection")
-        Dim tdConnection = New TDAPIOLELib.TDConnection
+        tdConnection = CreateObject("TDApiOle80.TDConnection")
+        'tdConnection = New TDAPIOLELib.TDConnection
         ' tdConnection.
         'Initialise the Quality center connection
         tdConnection.InitConnectionEx(qcURL)
@@ -685,17 +686,16 @@ Public Class dbConnectivity
 
 End Class
 
-
 Public Class StatusChange
     Public clTDConnectivity As New TDConnectivity
 
     Sub ChangeStatusScenario(ByVal qcTSId As Long, ByVal qcStatus As String, ByVal sLog As String,
                              Optional ByVal sAttachment As String = "C:\\test.txt")
-        Call clTDConnectivity.ConnectToTD()
+        'Call clTDConnectivity.ConnectToTD()
         Dim dDateToday As String = Today & "_" & Now.ToLongTimeString
         Dim TSetFact, TestSetFilter, TestSetList, myTestSet
         Dim attachF, theAttachment
-        TSetFact = New TDAPIOLELib.TestSetFactory
+        TSetFact = clTDConnectivity.tdConnection.TestSetFactory
         TestSetFilter = TSetFact.Filter
         TestSetFilter.Filter("CY_CYCLE_ID") = qcTSId
 
@@ -790,7 +790,6 @@ Public Class StatusChangeCase
 
 
 End Class
-
 
 Public Class AddAttachments
     Public clTDConnectivity As New TDConnectivity
@@ -1312,6 +1311,7 @@ Public Class GeneratoryDanych
 
     Function GetChar(iZnak) As String
         ' W literach serii nie używa się liter 'O' i 'Q'. Jeżeli więc ktoś poda takie litery w serii to z pewnością dane są błędne.
+        ' http://zylla.wipos.p.lodz.pl/ut/paszport.html#dowodosobisty
         Dim sZnak As String = "A,10"
         Select Case iZnak
             Case 1
